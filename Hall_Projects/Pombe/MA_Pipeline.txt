@@ -1,0 +1,123 @@
+Pipeline for Analyzing Mutation Accumulation Data in S. pombe
+
+
+QC Reads
+
+1. /usr/local/ea-utils/latest/bin/fastq-mcf ../../Adaptors.fasta ../Sample${i}_R1.fastq 
+../Sample${i}_R2.fastq -o Sample${i}_R1.filtered.fastq -o Sample${i}_R2.filtered.fastq 
+-C 1000000 -q 20 -p 10 -u -x 0.01
+
+2. /usr/local/fastx_toolkit/latest/bin/fastx_trimmer -Q33 -f 10 -i 
+Sample${i}_R1.filtered.fastq -o Sample${i}_R1.trimmed.fastq
+
+3. /usr/local/fastx_toolkit/latest/bin/fastx_trimmer -Q33 -f 10 -i	
+Sample${i}_R2.filtered.fastq -o Sample${i}_R2.trimmed.fastq
+
+BWA
+4. /usr/local/bwa/latest/bwa aln ../../ReferenceGenome/SPombe.RefGenome.fa 
+Sample${i}_R1.trimmed.fastq > Sample${i}_1.sai
+
+5. /usr/local/bwa/latest/bwa aln ../../ReferenceGenome/SPombe.RefGenome.fa 
+Sample${i}_R2.trimmed.fastq > Sample${i}_2.sai
+
+6. /usr/local/bwa/latest/bwa sampe ../../ReferenceGenome/SPombe.RefGenome.fa 
+Sample${i}_1.sai Sample${i}_2.sai Sample${i}_R1.trimmed.fastq Sample${i}_R2.trimmed.fastq 
+> Sample${i}.sam
+
+
+SAMTOOLS
+
+7. /usr/local/samtools/latest/samtools view -bS -T 
+../../ReferenceGenome/SPombe.RefGenome.fa Sample${i}.sam > Sample${i}.bam 
+
+8. /usr/local/samtools/latest/samtools sort Sample${i}.bam Sample${i}.sorted
+
+9. /usr/local/samtools/latest/samtools index Sample${i}.sorted.bam 
+
+PICARD
+
+10. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/picard/latest/AddOrReplaceReadGroups.jar I= Sample${i}.sorted.bam 
+O= Sample${i}.sorted.fixed.bam SORT_ORDER=coordinate RGID=PombeLane1 RGLB=bar 
+RGPL=illumina RGSM=Sample${i} RGPU=6 CREATE_INDEX=True VALIDATION_STRINGENCY=LENIENT
+
+11. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/picard/latest/MarkDuplicates.jar I=Sample${i}.sorted.fixed.bam 
+O=Sample${i}.sorted.fixed.marked.bam M=Sample${i}.metrics CREATE_INDEX=True 
+VALIDATION_STRINGENCY=LENIENT
+
+GATK
+
+12. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/gatk/latest/GenomeAnalysisTK.jar -R ../../ReferenceGenome/SPombe.RefGenome.fa 
+-I Sample${i}.sorted.fixed.marked.bam -T RealignerTargetCreator -o Sample${i}.intervals
+
+13. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/gatk/latest/GenomeAnalysisTK.jar -R ../../ReferenceGenome/SPombe.RefGenome.fa 
+-I Sample${i}.sorted.fixed.marked.bam -T IndelRealigner -targetIntervals 
+Sample${i}.intervals -o Sample${i}.sorted.fixed.marked.realigned.bam
+
+14. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/gatk/latest/GenomeAnalysisTK.jar -R ../../ReferenceGenome/SPombe.RefGenome.fa 
+-I Sample${i}.sorted.fixed.marked.realigned.bam -T UnifiedGenotyper -rf BadCigar 
+-ploidy 1 -glm BOTH -o Sample${i}.sorted.fixed.marked.realigned.vcf
+ 
+15. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/gatk/latest/GenomeAnalysisTK.jar -T BaseRecalibrator 
+-I Sample${i}.sorted.fixed.marked.realigned.bam -R 
+../../ReferenceGenome/SPombe.RefGenome.fa -rf BadCigar -knownSites 
+Sample${i}.sorted.fixed.marked.realigned.vcf -o recal_data.grp
+
+16. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/gatk/latest/GenomeAnalysisTK.jar -R ../../ReferenceGenome/SPombe.RefGenome.fa 
+-I Sample${i}.sorted.fixed.marked.realigned.bam -T PrintReads-rf BadCigar  
+-o Sample${i}.mapped.bam -BQSR recal_data.grp
+
+
+COMPARE SAMPLES
+1. java -Xmx2g -classpath "/usr/local/picard/latest/" -jar 
+/usr/local/gatk/latest/GenomeAnalysisTK.jar -R ../ReferenceGenome/SPombe.RefGenome.fa 
+-I Sample1.sorted.fixed.marked.realigned.bam  -I Sample2.sorted.fixed.marked.realigned.bam
+-I <All SAMPLES> -I Ancestor1.sorted.fixed.marked.realigned.bam 
+-I Ancestor2.sorted.fixed.marked.realigned.bam   -T UnifiedGenotyper -rf BadCigar 
+-ploidy 1 -glm BOTH -o ComparedVariants.vcf
+
+DELLY
+1. export OMP_NUM_THREADS=4
+
+2. export LD_LIBRARY_PATH=/usr/local/boost/1.54.0/gcc447/lib/:${LD_LIBRARY_PATH}
+
+3. time /usr/local/openmpi/1.4.4/gcc412/bin/mpirun -np $NSLOTS 
+/usr/local/delly/latest/delly -t DEL -o Delly/delly.deletion.vcf -q 10 
+../Sample${i}.sorted.bam
+
+4. time /usr/local/openmpi/1.4.4/gcc412/bin/mpirun -np $NSLOTS 
+/usr/local/delly/latest/delly -t DUP -o Delly/delly.duplication.vcf -q 10 
+../Sample${i}.sorted.bam
+
+5. time /usr/local/openmpi/1.4.4/gcc412/bin/mpirun -np $NSLOTS 
+/usr/local/delly/latest/delly -t INV -o Delly/delly.inversion.vcf -q 10 
+../Sample${i}.sorted.bam
+
+6. time /usr/local/openmpi/1.4.4/gcc412/bin/mpirun -np $NSLOTS 
+/usr/local/delly/latest/delly -t TRA -o Delly/delly.translocation.vcf -q 10 
+../Sample${i}.sorted.bam
+
+VEP
+
+1. time perl /usr/local/ensembl-tools/latest/scripts/variant_effect_predictor/
+variant_effect_predictor.pl -i ./NewVCF/VCF_File${i}.txt  --database --genomes 
+--species schizosaccharomyces_pombe -fork 4 -o 
+VEPfiles/VEP_File${i}.txt
+
+TRANSCRIPTOME ASSEMBLY
+
+	TopHat
+1. export PATH=/usr/local/samtools/0.1.19/:${PATH}
+   
+2. time /usr/local/tophat/latest/bin/tophat -i 30 -I 20000 -G ../SPref/SPref.gtf 
+--transcriptome-index ../SP_transcriptome/SP ../SP_bowtie/SP RNAseq_SP${i}.fastq
+	
+	Cufflinks
+3. time /usr/local/cufflinks/latest/bin/cufflinks -q -o ./cufflinks_out -g 
+../SPref/SPref.gtf ./tophat_out/hits_SP${i}.bam
