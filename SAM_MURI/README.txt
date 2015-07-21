@@ -8,8 +8,8 @@ promoters.pl
 
 Matches SNP position to promoter regions. 
 
-written for adapted version of promoter data set at RegulonDB
-http://regulondb.ccg.unam.mx/menu/download/datasets/index.jsp
+written for adapted version of promoter data set at Promoter Analysis Tools
+http://www.ccg.unam.mx/Computational_Genomics/PromoterTools/
 
 data set was condensed to one line of data for each promoter region organized as such:
 
