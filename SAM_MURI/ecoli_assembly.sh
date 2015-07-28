@@ -5,7 +5,7 @@
 # S.c. Gene Conversion
 date
 cd /N/dc2/scratch/megbehri/SAM_MURI/140808/plate_1
-AR=(112 113 114 116 118)
+AR=(118)
 
 for i in "${AR[@]}"
 do
@@ -13,6 +13,7 @@ do
 	gunzip *
 	cat *R1_001.fastq > Sample${i}_R1.fastq
 	cat *R2_001.fastq > Sample${i}_R2.fastq
+        rm -rf Pindel*
 	
 	# clean and trim
 	echo "#!/bin/bash" > SamMuri${i}_qc_clean.sh
@@ -59,6 +60,7 @@ do
 	echo "" >> SamMuri${i}_Assemble.sh
 	echo "samtools sort -n -m 4000000000 Sample${i}.sorted.bam Sample${i}.sorted.pindel" >> SamMuri${i}_Assemble.sh
 	echo "" >> SamMuri${i}_Assemble.sh
+	echo "qsub -l walltime=2:00:00,vmem=20gb SamMuri${i}_RetroSeq.sh" >> SamMuri${i}_Assemble.sh
 	echo "samtools index Sample${i}.sorted.pindel.bam" >> SamMuri${i}_Assemble.sh
 	###Below Added to test if GATK helps clean up reads for Pindel	
 	echo "java -Xmx2g -classpath "/N/soft/rhel6/picard/picard-tools-1.107/" -jar /N/soft/rhel6/picard/picard-tools-1.107/AddOrReplaceReadGroups.jar I=Sample${i}.sorted.bam O=Sample${i}.sorted.fixed.bam SORT_ORDER=coordinate RGID=GeneConv RGLB=bar RGPL=illumina RGSM=Sample${i} RGPU=6 CREATE_INDEX=True VALIDATION_STRINGENCY=LENIENT" >> SamMuri${i}_Assemble.sh
@@ -76,7 +78,7 @@ do
 	echo "Sample${i}.sorted.fixed.marked.realigned.bam	300	Sample${i}" > Sample${i}_Pindel.config.txt
 	echo "" >> SamMuri${i}_Assemble.sh
 	echo "mkdir Pindel4" >> SamMuri${i}_Assemble.sh
-	echo "/N/dc2/projects/MicroEukMA/softwares/pindel/pindel -f /N/dc2/scratch/megbehri/SAM_MURI/140808/Ecoli_RefGenome/Ecoli_K12_MG1655.fna -i Sample${i}_Pindel.config.txt -l -k -M 4 -o Sample${i}.pindel4.results" >> SamMuri${i}_Assemble.sh
+	echo "/N/dc2/scratch/megbehri/SAM_MURI/Tools/pindel/pindel -f /N/dc2/scratch/megbehri/SAM_MURI/140808/Ecoli_RefGenome/Ecoli_K12_MG1655.fna -i Sample${i}_Pindel.config.txt -l -k -M 4 -o Sample${i}.pindel4.results" >> SamMuri${i}_Assemble.sh
 	echo " mv *.pindel4.* Pindel4/" >> SamMuri${i}_Assemble.sh
 	echo "" >> SamMuri${i}_Assemble.sh
 	echo "qsub -l walltime=2:00:00,vmem=20gb SamMuri${i}_convertPindel.sh" >> SamMuri${i}_Assemble.sh
@@ -94,6 +96,19 @@ do
 	echo "bzip2 Sample${i}_R*_trimmed.fastq" >> SamMuri${i}_compress_fastq.sh
 	echo "" >> SamMuri${i}_compress_fastq.sh
 	echo "exit" >> SamMuri${i}_compress_fastq.sh
+	
+	##### call novel insertion sequences######
+	echo "#!/bin/bash" > SamMuri${i}_RetroSeq.sh
+	echo "" >> SamMuri${i}_RetroSeq.sh
+	echo "#$ -l vmem=50gb walltime=2:00:00 " >> SamMuri${i}_RetroSeq.sh
+	echo "" >> SamMuri${i}_RetroSeq.sh
+	echo "cd /N/dc2/scratch/megbehri/SAM_MURI/140808/plate_1/Sample_${i}/" >> SamMuri${i}_RetroSeq.sh
+	echo "mkdir InsSeq" >> SamMuri${i}_RetroSeq.sh
+	echo "cd InsSeq" >> SamMuri${i}_RetroSeq.sh
+	echo "perl /N/dc2/scratch/megbehri/SAM_MURI/Tools/RetroSeq/bin/retroseq.pl -discover -eref /N/dc2/scratch/megbehri/SAM_MURI/140808/Ecoli_RefGenome/InsSeq/Ecoli_IS_RefFile.txt -bam ../Sample${i}.sorted.bam -output Sample${i}.IS.Reads -align" >> SamMuri${i}_RetroSeq.sh
+	echo "perl /N/dc2/scratch/megbehri/SAM_MURI/Tools/RetroSeq/bin/retroseq.pl -call -bam ../Sample${i}.sorted.bam -ref /N/dc2/scratch/megbehri/SAM_MURI/140808/Ecoli_RefGenome/Ecoli_K12_MG1655.fna -output Sample${i}.IS -input Sample${i}.IS.Reads -hets" >> SamMuri${i}_RetroSeq.sh
+	echo "" >> SamMuri${i}_RetroSeq.sh
+	echo "exit" >> SamMuri${i}_RetroSeq.sh
 	
 	##### convert pindel files to VCF #####
 	echo "#!/bin/bash" > SamMuri${i}_convertPindel.sh
@@ -117,6 +132,7 @@ do
 	chmod u+x SamMuri${i}_Assemble.sh
 	chmod u+x SamMuri${i}_compress_fastq.sh
 	chmod u+x SamMuri${i}_convertPindel.sh
+	chmod u+x SamMuri${i}_RetroSeq.sh
 	
 	qsub -l walltime=2:00:00,vmem=20gb SamMuri${i}_qc_clean.sh
 	cd ..
