@@ -1,0 +1,22 @@
+show_ticks          = yes
+show_tick_labels    = yes
+
+<ticks>
+radius = 1r
+multiplier = 1e-3
+color = black
+thickness = 3p
+size      = 30p
+format = %d
+
+<tick>
+spacing = 100000u
+size = 15p
+show_label     = yes
+label_size     = 20p
+label_offset = 10p
+format         = %d
+</tick>
+
+
+</ticks>
