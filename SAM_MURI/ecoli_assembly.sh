@@ -2,9 +2,11 @@
 
 #$ -q rcc-30d
 
-# S.c. Gene Conversion
+# Ecoli Assembly
 date
 cd /N/dc2/scratch/megbehri/SAM_MURI/140808/plate_1
+
+# Insert name of Sample directories below separated by space
 AR=(<SAMPLES>)
 
 for i in "${AR[@]}"
@@ -37,7 +39,7 @@ do
 	echo "" >> SamMuri${i}_qc_clean.sh
 	echo "exit" >> SamMuri${i}_qc_clean.sh
 
-#### Assembly and Pindel ####
+#### Assembly ####
 
 	echo "#!/bin/bash" > SamMuri${i}_Assemble.sh
 	echo "" >> SamMuri${i}_Assemble.sh
@@ -58,7 +60,7 @@ do
 	echo "samtools index Sample${i}.sorted.bam" >> SamMuri${i}_Assemble.sh
 	echo "" >> SamMuri${i}_Assemble.sh
 	echo "qsub -l walltime=2:00:00,vmem=20gb SamMuri${i}_RetroSeq.sh" >> SamMuri${i}_Assemble.sh
-	###Below Added to test if GATK helps clean up reads for Pindel	
+	###PICARD AND GATK needs 64bit Java for larger genomes	
 	echo "java -Xmx2g -classpath "/N/soft/rhel6/picard/picard-tools-1.107/" -jar /N/soft/rhel6/picard/picard-tools-1.107/AddOrReplaceReadGroups.jar I=Sample${i}.sorted.bam O=Sample${i}.sorted.fixed.bam SORT_ORDER=coordinate RGID=GeneConv RGLB=bar RGPL=illumina RGSM=Sample${i} RGPU=6 CREATE_INDEX=True VALIDATION_STRINGENCY=LENIENT" >> SamMuri${i}_Assemble.sh
 	echo "java -Xmx2g -classpath "/N/soft/rhel6/picard/picard-tools-1.107/" -jar /N/soft/rhel6/picard/picard-tools-1.107/MarkDuplicates.jar I=Sample${i}.sorted.fixed.bam O=Sample${i}.sorted.fixed.marked.bam M=Sample${i}.metrics CREATE_INDEX=True VALIDATION_STRINGENCY=LENIENT" >> SamMuri${i}_Assemble.sh
 	echo "GATK" >&2
@@ -84,7 +86,7 @@ do
 	echo "" >> SamMuri${i}_compress_fastq.sh
 	echo "exit" >> SamMuri${i}_compress_fastq.sh
 	
-	##### call novel insertion sequences######
+	##### call novel insertion sequences needs a RetroSeq Library, Can be edited to use Delly instead######
 	echo "#!/bin/bash" > SamMuri${i}_RetroSeq.sh
 	echo "" >> SamMuri${i}_RetroSeq.sh
 	echo "#$ -l vmem=50gb walltime=2:00:00 " >> SamMuri${i}_RetroSeq.sh
